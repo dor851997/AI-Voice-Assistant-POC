@@ -22,7 +22,7 @@ The project is organized into the following key components:
 
 1. **Clone the Repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/dor851997/AI-Voice-Assistant-Kardom-POC.git
    cd AI-Voice-Assistant-Kardom-POC
    ```
 
