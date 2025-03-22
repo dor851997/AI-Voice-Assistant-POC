@@ -75,5 +75,3 @@ The project is organized into the following key components:
 
 - **config.py**:
   - Centralizes shared configuration settings, including the list of allowed commands, to avoid duplication and improve maintainability.
-
-This modular structure ensures that each component is responsible for a specific part of the voice assistant pipeline—from real-time audio handling and speech-to-text conversion to LLM processing, command execution, and vector storage for later retrieval and analysis.
