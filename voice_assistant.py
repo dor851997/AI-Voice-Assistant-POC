@@ -37,12 +37,6 @@ class CustomVoiceAssistant(voice_assistant.VoiceAssistant):
         )
         return instance
     
-    async def on_llm_response(self, raw_response: str):
-        processed_response = postprocess(raw_response)
-        logging.info("Post-processed LLM response: " + processed_response)
-        # Optionally, forward this response for TTS or further handling
-        # e.g., call self.say(processed_response) if needed.
-        return processed_response
 
     async def on_user_message(self, text):
         """
@@ -64,14 +58,29 @@ class CustomVoiceAssistant(voice_assistant.VoiceAssistant):
         logging.info(f"After appending user message, chat context length: {len(self.chat_ctx.messages)}")
         await self.save_new_interactions()
         return
-
+    
+    async def my_before_tts_cb(self, raw_response: str) -> str:
+        """
+        This callback intercepts the raw LLM response before TTS.
+        If the postprocessed response is 'no comment', return None to cancel TTS.
+        Otherwise, return the processed text.
+        """
+        from llm_handler import postprocess  # Ensure you have this function available.
+        processed = postprocess(raw_response)
+        logging.info("my_before_tts_cb: Raw response processed to: " + processed)
+        if processed.lower() == "no comment":
+            logging.info("my_before_tts_cb: Detected 'no comment', cancelling TTS.")
+            return None  # Return None to signal that TTS should be skipped.
+        return processed
+    
     async def save_new_interactions(self) -> None:
         """
         Await a short delay to ensure that the assistant's response has been appended,
         then iterate over the entire chat context and save every user–assistant (or tool)
-        pair that hasn't been saved yet.
+        pair that hasn't been saved yet. If an assistant response is "direct channel selection"
+        and a following tool message exists, use the tool message's content as the final assistant output.
         """
-        # Wait briefly to allow asynchronous operations (like generating the assistant's reply) to complete.
+        # Wait briefly to allow asynchronous operations to complete.
         await asyncio.sleep(0.5)
         
         messages = self.chat_ctx.messages
@@ -81,15 +90,38 @@ class CustomVoiceAssistant(voice_assistant.VoiceAssistant):
         
         i = 0
         while i < len(messages) - 1:
-            if messages[i].role == "user" and messages[i+1].role in ["assistant", "tool"]:
+            if messages[i].role == "user":
                 user_msg = messages[i].content.strip()
-                assistant_msg = messages[i+1].content.strip()
-                # Only save if both messages are non-empty
+                assistant_msg = ""
+                # Check for a valid assistant response following the user message.
+                if messages[i+1].role in ["assistant", "tool"]:
+                    # If the next message is from the assistant...
+                    if messages[i+1].role == "assistant":
+                        # If the assistant's response is the generic placeholder for direct channel selection...
+                        if messages[i+1].content.strip().lower() == "direct channel selection":
+                            # Check if there's a following tool message with the detailed output.
+                            if (i + 2) < len(messages) and messages[i+2].role == "tool":
+                                assistant_msg = messages[i+2].content.strip()
+                                logging.info("Merging tool result into assistant output for direct channel selection.")
+                                i += 3  # Skip the user, assistant, and tool messages.
+                            else:
+                                assistant_msg = messages[i+1].content.strip()
+                                i += 2
+                        else:
+                            assistant_msg = messages[i+1].content.strip()
+                            i += 2
+                    elif messages[i+1].role == "tool":
+                        assistant_msg = messages[i+1].content.strip()
+                        i += 2
+                else:
+                    i += 1
+                    continue
+                
+                # Only save the pair if both messages are non-empty.
                 if user_msg and assistant_msg:
                     pair = {"user": user_msg, "assistant": assistant_msg}
                     if pair not in self.rag_agent.interactions:
                         logging.info(f"Saving interaction pair - User: {user_msg} | Assistant: {assistant_msg}")
                         self.rag_agent.add_interaction(user_msg, assistant_msg)
-                i += 2  # Skip over this pair.
             else:
                 i += 1
