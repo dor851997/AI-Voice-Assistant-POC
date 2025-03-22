@@ -1,0 +1,6 @@
+livekit-agents>=0.8.7
+livekit-plugins-openai>=0.8.1
+livekit-plugins-silero>=0.6.4
+livekit-plugins-deepgram==0.7.1
+python-dotenv~=1.0
+pinecone==6.0.2
