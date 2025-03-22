@@ -1,3 +1,4 @@
 .env
 venv
-__paychace__/
+__pycache__/
+*.pyc
